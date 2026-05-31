@@ -1,67 +1,72 @@
-# QGC/PX4 ULog AI Export Tool
+# QGC/PX4 ULog AI 解析工具
 
-This tool converts one PX4/QGroundControl `.ulg` file into files that are easy to inspect with ChatGPT, local LLMs, Excel, or Python.
+这个工具用于把 PX4/QGroundControl 的 `.ulg` 日志转换成更适合 AI、Excel 和 Python 阅读的格式。
 
-It does not require MATLAB. It uses Python and `pyulog`.
+工具不依赖 MATLAB，底层使用 Python 和 `pyulog`。
 
-## Install with Conda
+## 安装
 
-Open PowerShell in this folder:
+先克隆仓库并进入项目目录：
 
 ```powershell
-cd F:\workspace\matlab\ulog_ai_tool
+git clone https://github.com/YJLEC/ulog2ai-python.git
+cd ulog2ai-python
+```
+
+创建并激活 conda 环境：
+
+```powershell
 conda env create -f environment.yml
 conda activate ulog-ai
 ```
 
-If the environment already exists, update it:
+如果 `ulog-ai` 环境已经存在，可以直接更新依赖：
 
 ```powershell
 conda activate ulog-ai
 python -m pip install -r requirements.txt
 ```
 
-## Usage
+## 使用
 
-Default flow-focused export:
-
-```powershell
-conda activate ulog-ai
-python parse_ulog.py D:\QGroundControl\log\log_52_UnknownDate.ulg
-```
-
-Choose an output folder:
+默认使用 `flow` 预设，适合通用飞行状态和光流定位问题分析：
 
 ```powershell
-python parse_ulog.py D:\QGroundControl\log\log_52_UnknownDate.ulg --out F:\workspace\matlab\log_52_python_export
+python parse_ulog.py C:\path\to\flight.ulg
 ```
 
-Choose a preset:
+指定输出目录：
 
 ```powershell
-python parse_ulog.py D:\QGroundControl\log\log_52_UnknownDate.ulg --preset basic
-python parse_ulog.py D:\QGroundControl\log\log_52_UnknownDate.ulg --preset flow
-python parse_ulog.py D:\QGroundControl\log\log_52_UnknownDate.ulg --preset full
+python parse_ulog.py C:\path\to\flight.ulg --out C:\path\to\flight_ai_export
 ```
 
-## Output
+选择预设：
 
-The default output folder is `<ulg filename>_ai_export`.
+```powershell
+python parse_ulog.py C:\path\to\flight.ulg --preset basic
+python parse_ulog.py C:\path\to\flight.ulg --preset flow
+python parse_ulog.py C:\path\to\flight.ulg --preset full
+```
+
+## 输出内容
+
+默认输出目录为 `<日志文件名>_ai_export`。
 
 ```text
-ulog_ai_packet.md       ChatGPT-friendly report and upload guide
-ulog_ai_summary.json    Machine-readable summary and diagnostics
-ulog_ai_chunks.jsonl    Chunked records for local/private LLM workflows
-available_topics.csv    All topics and instances in the log
-parameters.csv          Initial PX4 parameter snapshot
-logged_output.csv       PX4 logger/commander/warning messages
-dropout_intervals.csv   ULog dropout records
-topics_csv/             One CSV per exported topic instance
+ulog_ai_packet.md       适合上传给 ChatGPT 的报告和文件索引
+ulog_ai_summary.json    结构化摘要和基础诊断结果
+ulog_ai_chunks.jsonl    面向本地或私有大模型的分块数据
+available_topics.csv    日志中所有 topic 和 instance 列表
+parameters.csv          PX4 参数快照
+logged_output.csv       PX4 commander/logger/warning 等消息
+dropout_intervals.csv   ULog 记录丢包区间
+topics_csv/             每个导出 topic instance 一个 CSV 文件
 ```
 
-## Presets
+## 预设
 
-`flow` is the default. It exports general flight state plus optical-flow/range-finder/EKF topics:
+`flow` 是默认预设，包含通用飞行状态、光流、测距和 EKF 相关 topic：
 
 - `vehicle_status`, `manual_control_setpoint`
 - `vehicle_attitude`, `vehicle_attitude_setpoint`, `actuator_outputs`
@@ -70,20 +75,24 @@ topics_csv/             One CSV per exported topic instance
 - `estimator_status`, `estimator_status_flags`, `estimator_aid_src_optical_flow`, `estimator_optical_flow_vel`, `estimator_innovations`, `estimator_innovation_test_ratios`
 - `battery_status`
 
-`basic` exports a smaller general set. `full` exports every topic present in the log.
+其他预设：
 
-## Common Checks
+- `basic`：较小的通用分析集合
+- `flow`：默认，通用 + 光流定位分析集合
+- `full`：导出日志中存在的所有 topic
 
-The Markdown and JSON summary highlight common optical-flow position-hold issues:
+## 常见诊断项
 
-- `vehicle_status.nav_state` stayed `1`: likely Altitude mode, not Position mode.
-- `estimator_status_flags.cs_opt_flow` stayed `0`: EKF did not report optical-flow fusion.
-- `estimator_aid_src_optical_flow.fused` stayed `0`: optical-flow observations were not fused.
-- `vehicle_local_position_setpoint` horizontal setpoints are all NaN: horizontal position control was not active.
-- `distance_sensor.current_distance` and `vehicle_optical_flow.quality` statistics help verify range finder and flow quality.
+生成的 Markdown 和 JSON 会标出一些常见问题：
 
-## Notes
+- `vehicle_status.nav_state` 一直为 `1`：通常表示实际处于 Altitude/定高模式，不是 Position/定点模式。
+- `estimator_status_flags.cs_opt_flow` 一直为 `0`：EKF 状态中没有进入光流融合。
+- `estimator_aid_src_optical_flow.fused` 一直为 `0`：光流观测没有被 EKF 融合。
+- `vehicle_local_position_setpoint` 的 `x/y/vx/vy` 全是 NaN：水平位置控制 setpoint 没有生效。
+- `distance_sensor.current_distance` 和 `vehicle_optical_flow.quality` 可用于检查测距和光流质量。
 
-- The tool processes one `.ulg` file at a time.
-- If the file does not start with the ULog magic bytes, the tool stops with an invalid-file message.
-- Large topic CSVs are downsampled to 20000 rows by default. The summary records whether a CSV was downsampled.
+## 注意事项
+
+- 当前版本一次只处理一个 `.ulg` 文件。
+- 如果文件不是有效 ULog，工具会提示文件头无效并停止。
+- 大型 topic 默认最多导出 20000 行 CSV；如发生下采样，会在摘要中标记。
