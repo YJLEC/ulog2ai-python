@@ -1,0 +1,7 @@
+__pycache__/
+*.py[cod]
+*_ai_export/
+topics_csv/
+.pytest_cache/
+.mypy_cache/
+.ruff_cache/
