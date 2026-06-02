@@ -190,7 +190,10 @@ def read_logged_output(ulog: ULog) -> list[dict[str, Any]]:
     rows: list[dict[str, Any]] = []
     for item in getattr(ulog, "logged_messages", []) or []:
         timestamp = getattr(item, "timestamp", None)
-        level = getattr(item, "log_level_str", None) or getattr(item, "log_level", "")
+        level_attr = getattr(item, "log_level_str", None)
+        level = level_attr() if callable(level_attr) else level_attr
+        if level is None:
+            level = getattr(item, "log_level", "")
         message = getattr(item, "message", "")
         rows.append({
             "time_seconds": us_to_seconds(timestamp),
